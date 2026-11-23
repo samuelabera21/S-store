@@ -1,0 +1,297 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  displayName  String?    @map("display_name")
+  avatarUrl    String?    @map("avatar_url")
+  about        String?
+  website      String?
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  createdPins  Pin[]      @relation("PinCreator")
+  boards       Board[]    @relation("BoardOwner")
+  savedPins    BoardPin[] @relation("UserSavedPins")
+  comments     Comment[]
+  reactions    Reaction[]
+  tries        PinTry[]
+
+  following    Follow[]   @relation("UserFollowing")
+  followers    Follow[]   @relation("UserFollowers")
+  collaborations BoardCollaborator[]
+  notifications Notification[] @relation("UserNotifications")
+  triggeredNotifications Notification[] @relation("UserTriggeredNotifications")
+  conversationParticipants ConversationParticipant[]
+  sentMessages Message[]
+
+  @@map("users")
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model Pin {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  imageUrl    String     @map("image_url")
+  videoUrl    String?    @map("video_url")
+  mediaType   String     @default("image") @map("media_type") // "image" | "video" | "carousel"
+  mediaUrls   String[]   @default([]) @map("media_urls")
+  imageWidth  Int?       @map("image_width")
+  imageHeight Int?       @map("image_height")
+  sourceLink  String?    @map("source_link")
+  category    String     @default("All")
+  viewCount   Int        @default(0) @map("view_count")
+  clickCount  Int        @default(0) @map("click_count")
+  
+  // Rich Pins metadata
+  pinType      String     @default("standard") @map("pin_type") // "standard" | "product" | "recipe" | "article"
+  price        Float?
+  currency     String?    @default("USD")
+  availability String?    // "in_stock" | "out_of_stock"
+  brand        String?
+  ingredients  String[]   @default([])
+  cookTime     Int?       @map("cook_time")
+  servings     Int?
+  rating       Float?
+  reviewCount  Int?       @default(0) @map("review_count")
+
+  userId      String     @map("user_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  creator     User       @relation("PinCreator", fields: [userId], references: [id], onDelete: Cascade)
+  boardPins   BoardPin[]
+  comments    Comment[]
+  reactions   Reaction[]
+  tries       PinTry[]
+  notifications Notification[]
+  sharedInMessages Message[]
+  analyticsEvents  AnalyticsEvent[]
+
+  @@index([category])
+  @@index([mediaType])
+  @@index([pinType])
+  @@map("pins")
+}
+
+model Board {
+  id          String         @id @default(uuid())
+  title       String
+  description String?
+  isPrivate   Boolean        @default(false) @map("is_private")
+  isArchived  Boolean        @default(false) @map("is_archived")
+  coverImageUrl String?      @map("cover_image_url")
+  userId      String         @map("user_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  owner       User           @relation("BoardOwner", fields: [userId], references: [id], onDelete: Cascade)
+  boardPins   BoardPin[]
+  sections    BoardSection[]
+  collaborators BoardCollaborator[]
+
+  @@map("boards")
+}
+
+model BoardCollaborator {
+  id        String   @id @default(uuid())
+  boardId   String   @map("board_id")
+  userId    String   @map("user_id")
+  role      String   @default("editor")
+  invitedAt DateTime @default(now()) @map("invited_at")
+
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+  @@index([userId])
+  @@index([boardId])
+  @@map("board_collaborators")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  actorId   String   @map("actor_id")
+  type      String   // "follow" | "save" | "comment" | "reaction"
+  message   String
+  pinId     String?  @map("pin_id")
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  recipient User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User     @relation("UserTriggeredNotifications", fields: [actorId], references: [id], onDelete: Cascade)
+  pin       Pin?     @relation(fields: [pinId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+model BoardSection {
+  id        String     @id @default(uuid())
+  title     String
+  boardId   String     @map("board_id")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  board     Board      @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  boardPins BoardPin[]
+
+  @@index([boardId])
+  @@map("board_sections")
+}
+
+model BoardPin {
+  id        String        @id @default(uuid())
+  boardId   String        @map("board_id")
+  pinId     String        @map("pin_id")
+  userId    String        @map("user_id")
+  sectionId String?       @map("section_id")
+  savedAt   DateTime      @default(now()) @map("saved_at")
+  note      String?
+  position  Int           @default(0)
+
+  board     Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  pin       Pin           @relation(fields: [pinId], references: [id], onDelete: Cascade)
+  savedBy   User          @relation("UserSavedPins", fields: [userId], references: [id], onDelete: Cascade)
+  section   BoardSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@unique([boardId, pinId], name: "board_pin_unique")
+  @@index([userId])
+  @@index([boardId])
+  @@index([pinId])
+  @@index([sectionId])
+  @@map("board_pins")
+}
+
+model Comment {
+  id        String    @id @default(uuid())
+  text      String
+  pinId     String    @map("pin_id")
+  userId    String    @map("user_id")
+  parentId  String?   @map("parent_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  pin       Pin       @relation(fields: [pinId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+
+  @@index([pinId])
+  @@index([parentId])
+  @@map("comments")
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  type      String   @default("heart")
+  pinId     String   @map("pin_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  pin       Pin      @relation(fields: [pinId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pinId, userId, type])
+  @@index([pinId])
+  @@map("reactions")
+}
+
+model Conversation {
+  id           String                    @id @default(uuid())
+  createdAt    DateTime                  @default(now()) @map("created_at")
+  updatedAt    DateTime                  @updatedAt @map("updated_at")
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String       @map("conversation_id")
+  userId         String       @map("user_id")
+  lastReadAt     DateTime     @default(now()) @map("last_read_at")
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String       @map("conversation_id")
+  senderId       String       @map("sender_id")
+  text           String
+  sharedPinId    String?      @map("shared_pin_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sharedPin      Pin?         @relation(fields: [sharedPinId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@map("messages")
+}
+
+model PinTry {
+  id        String   @id @default(uuid())
+  pinId     String   @map("pin_id")
+  userId    String   @map("user_id")
+  imageUrl  String   @map("image_url")
+  text      String?
+  rating    Int?     @default(5)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  pin       Pin      @relation(fields: [pinId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([pinId])
+  @@index([userId])
+  @@map("pin_tries")
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  pinId     String   @map("pin_id")
+  userId    String?  @map("user_id")
+  type      String   // "impression" | "click" | "save"
+  createdAt DateTime @default(now()) @map("created_at")
+
+  pin       Pin      @relation(fields: [pinId], references: [id], onDelete: Cascade)
+
+  @@index([pinId])
+  @@index([createdAt])
+  @@map("analytics_events")
+}
+
