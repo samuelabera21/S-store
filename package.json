@@ -19,6 +19,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@neon/config": "^1.14.6",
+    "@neon/env": "^2.1.9",
     "@prisma/adapter-pg": "^6.4.0",
     "@prisma/client": "^6.4.0",
     "cloudinary": "^2.11.0",
