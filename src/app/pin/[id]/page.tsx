@@ -17,6 +17,7 @@ import PincodeModal from '@/components/PincodeModal'
 import Toast, { ToastMessage } from '@/components/Toast'
 import InteractiveVisualCrop from '@/components/InteractiveVisualCrop'
 import { PinItem, SessionState } from '@/types'
+import { parseVideoUrl } from '@/lib/video'
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -378,52 +379,64 @@ export default function PinPage({
           {/* Left Column: Image or Video with Expand & Visual Search Buttons */}
           <div className="bg-zinc-100 relative group flex items-center justify-center min-h-[460px] md:min-h-[640px] overflow-hidden">
             {pin.mediaType === 'video' && pin.videoUrl ? (
-              <div className="relative w-full h-full min-h-[500px] flex items-center justify-center bg-black">
-                <video
-                  ref={videoPlayerRef}
-                  src={pin.videoUrl}
-                  poster={isPosterImage ? pin.imageUrl : undefined}
-                  loop
-                  playsInline
-                  autoPlay
-                  preload="auto"
-                  muted={isVideoMuted}
-                  className="w-full h-full object-contain max-h-[800px]"
-                />
-                {/* Video Play/Pause and Mute Controls */}
-                <div className="absolute bottom-4 left-4 flex items-center gap-2 z-20">
-                  <button
-                    onClick={() => {
-                      if (videoPlayerRef.current) {
-                        if (isVideoPlaying) {
-                          videoPlayerRef.current.pause()
-                          setIsVideoPlaying(false)
-                        } else {
-                          videoPlayerRef.current.play()
-                          setIsVideoPlaying(true)
-                        }
-                      }
-                    }}
-                    className="p-2.5 bg-black/60 hover:bg-black/80 text-white rounded-full backdrop-blur-xs transition-transform hover:scale-105"
-                    title={isVideoPlaying ? 'Pause' : 'Play'}
-                  >
-                    {isVideoPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (videoPlayerRef.current) {
-                        videoPlayerRef.current.muted = !isVideoMuted
-                        setIsVideoMuted(!isVideoMuted)
-                      }
-                    }}
-                    className="p-2.5 bg-black/60 hover:bg-black/80 text-white rounded-full backdrop-blur-xs transition-transform hover:scale-105"
-                    title={isVideoMuted ? 'Unmute' : 'Mute'}
-                  >
-                    {isVideoMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                  </button>
+              parseVideoUrl(pin.videoUrl)?.provider === 'youtube' ? (
+                <div className="relative w-full h-full min-h-[500px] flex items-center justify-center bg-black">
+                  <iframe
+                    src={parseVideoUrl(pin.videoUrl)!.embedUrl}
+                    title={pin.title}
+                    className="w-full h-full min-h-[500px] border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
                 </div>
-              </div>
+              ) : (
+                <div className="relative w-full h-full min-h-[500px] flex items-center justify-center bg-black">
+                  <video
+                    ref={videoPlayerRef}
+                    src={pin.videoUrl}
+                    poster={isPosterImage ? pin.imageUrl : undefined}
+                    loop
+                    playsInline
+                    autoPlay
+                    preload="auto"
+                    muted={isVideoMuted}
+                    className="w-full h-full object-contain max-h-[800px]"
+                  />
+                  {/* Video Play/Pause and Mute Controls */}
+                  <div className="absolute bottom-4 left-4 flex items-center gap-2 z-20">
+                    <button
+                      onClick={() => {
+                        if (videoPlayerRef.current) {
+                          if (isVideoPlaying) {
+                            videoPlayerRef.current.pause()
+                            setIsVideoPlaying(false)
+                          } else {
+                            videoPlayerRef.current.play()
+                            setIsVideoPlaying(true)
+                          }
+                        }
+                      }}
+                      className="p-2.5 bg-black/60 hover:bg-black/80 text-white rounded-full backdrop-blur-xs transition-transform hover:scale-105"
+                      title={isVideoPlaying ? 'Pause' : 'Play'}
+                    >
+                      {isVideoPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (videoPlayerRef.current) {
+                          videoPlayerRef.current.muted = !isVideoMuted
+                          setIsVideoMuted(!isVideoMuted)
+                        }
+                      }}
+                      className="p-2.5 bg-black/60 hover:bg-black/80 text-white rounded-full backdrop-blur-xs transition-transform hover:scale-105"
+                      title={isVideoMuted ? 'Unmute' : 'Mute'}
+                    >
+                      {isVideoMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              )
             ) : (
               <img
                 src={activeImage}

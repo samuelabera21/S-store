@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { ArrowUpRight, Share2, Scan, ChevronLeft, ChevronRight, Volume2, VolumeX, Play, Tag, Clock } from 'lucide-react'
 import { PinItem } from '@/types'
+import { parseVideoUrl } from '@/lib/video'
 import SaveButton from './SaveButton'
 import PinActionsMenu from './PinActionsMenu'
 import ReportPinModal from './ReportPinModal'
@@ -151,34 +152,53 @@ export default function PinCard({
           {/* Dynamic Aspect Ratio Container */}
           <div style={{ paddingTop: `${aspectRatio}%` }} className="relative w-full">
             {isVideo ? (
-              <div className="absolute inset-0 w-full h-full bg-black">
-                <video
-                  ref={videoRef}
-                  src={pin.videoUrl!}
-                  poster={isPosterImage ? pin.imageUrl : undefined}
-                  autoPlay
-                  muted={isMuted}
-                  loop
-                  playsInline
-                  preload="auto"
-                  className="w-full h-full object-cover"
-                />
-                {/* Video Play Indicator Badge */}
-                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-black/60 backdrop-blur-sm text-white font-bold text-[10px] rounded-full flex items-center gap-1 z-10 pointer-events-none">
-                  <Play className="w-2.5 h-2.5 fill-white" />
-                  <span>Video</span>
+              parseVideoUrl(pin.videoUrl)?.provider === 'youtube' ? (
+                <div className="absolute inset-0 w-full h-full bg-black">
+                  <img
+                    src={pin.imageUrl}
+                    alt={pin.title}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-2xl bg-red-600/90 group-hover:bg-red-600 flex items-center justify-center shadow-lg transition-transform group-hover:scale-110">
+                      <Play className="w-5 h-5 fill-white text-white ml-0.5" />
+                    </div>
+                  </div>
+                  <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-red-600/90 text-white font-bold text-[10px] rounded-full flex items-center gap-1 z-10 pointer-events-none">
+                    <span>YouTube</span>
+                  </div>
                 </div>
+              ) : (
+                <div className="absolute inset-0 w-full h-full bg-black">
+                  <video
+                    ref={videoRef}
+                    src={pin.videoUrl!}
+                    poster={isPosterImage ? pin.imageUrl : undefined}
+                    autoPlay
+                    muted={isMuted}
+                    loop
+                    playsInline
+                    preload="auto"
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Video Play Indicator Badge */}
+                  <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-black/60 backdrop-blur-sm text-white font-bold text-[10px] rounded-full flex items-center gap-1 z-10 pointer-events-none">
+                    <Play className="w-2.5 h-2.5 fill-white" />
+                    <span>Video</span>
+                  </div>
 
-                {/* Mute/Unmute audio button */}
-                <button
-                  type="button"
-                  onClick={toggleMute}
-                  className="absolute bottom-2.5 left-2.5 p-1.5 rounded-full bg-black/70 hover:bg-black/90 text-white shadow-md z-20 transition-transform hover:scale-105"
-                  title={isMuted ? 'Unmute' : 'Mute'}
-                >
-                  {isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
-                </button>
-              </div>
+                  {/* Mute/Unmute audio button */}
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    className="absolute bottom-2.5 left-2.5 p-1.5 rounded-full bg-black/70 hover:bg-black/90 text-white shadow-md z-20 transition-transform hover:scale-105"
+                    title={isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    {isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                  </button>
+                </div>
+              )
             ) : (
               <img
                 src={mediaList[currentSlide]}

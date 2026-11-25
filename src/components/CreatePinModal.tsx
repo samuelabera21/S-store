@@ -13,8 +13,10 @@ import {
   ChevronRight,
   Plus,
   Layers,
+  Play,
 } from 'lucide-react'
 import { UserBoard } from '@/types'
+import { parseVideoUrl } from '@/lib/video'
 
 interface CreatePinModalProps {
   isOpen: boolean
@@ -100,6 +102,33 @@ export default function CreatePinModal({
     if (e) e.preventDefault()
     if (!webUrl.trim()) return
 
+    const trimmed = webUrl.trim()
+    const parsedVideo = parseVideoUrl(trimmed)
+
+    // Immediate YouTube / Online Video support in Save from site
+    if (parsedVideo) {
+      setVideoUrl(trimmed)
+      const thumb = parsedVideo.thumbnailUrl || ''
+      setImageUrl(thumb)
+      setMediaUrls(thumb ? [thumb] : [])
+      setSourceLink(trimmed)
+      setCategory('Entertainment')
+      setMediaUrlInput(trimmed)
+      setError(null)
+
+      // Fetch metadata from oEmbed
+      fetch(`https://noembed.com/embed?url=${encodeURIComponent(trimmed)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.title && !title) setTitle(data.title)
+          if (data?.author_name && !description) setDescription(`Video by ${data.author_name}`)
+        })
+        .catch(() => {})
+
+      setUploadMode('file')
+      return
+    }
+
     setScraping(true)
     setError(null)
     setScrapedImages([])
@@ -108,7 +137,7 @@ export default function CreatePinModal({
       const res = await fetch('/api/v1/pins/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: webUrl.trim() }),
+        body: JSON.stringify({ url: trimmed }),
       })
       const data = await res.json()
 
@@ -247,7 +276,7 @@ export default function CreatePinModal({
     return data.url
   }
 
-  // Handle direct URL paste for image or video
+  // Handle direct URL paste for image or video (including YouTube, Shorts, Vimeo, MP4)
   const handleMediaUrlChange = (val: string) => {
     setMediaUrlInput(val)
     setError(null)
@@ -259,27 +288,44 @@ export default function CreatePinModal({
       return
     }
 
-    const isVideoUrl =
-      /\.(mp4|webm|mov|ogg|m4v)(\?.*)?$/i.test(trimmed) ||
-      trimmed.includes('gtv-videos') ||
-      trimmed.includes('.mp4')
+    // Check for YouTube, YouTube Shorts, Vimeo, or direct video
+    const parsedVideo = parseVideoUrl(trimmed)
 
-    if (isVideoUrl) {
+    if (parsedVideo) {
       setVideoUrl(trimmed)
-      setImageUrl(trimmed)
-      setMediaUrls([trimmed])
-      extractAndStoreVideoPoster(trimmed)
-    } else {
-      setVideoUrl('')
-      setImageUrl(trimmed)
-      setMediaUrls([trimmed])
+      const thumb = parsedVideo.thumbnailUrl || ''
+      setImageUrl(thumb)
+      setMediaUrls(thumb ? [thumb] : [])
+      if (!sourceLink) setSourceLink(trimmed)
+      setCategory('Entertainment')
 
-      const img = new Image()
-      img.src = trimmed
-      img.onload = () => {
-        setImageWidth(img.naturalWidth || 800)
-        setImageHeight(img.naturalHeight || 1000)
+      if (parsedVideo.provider === 'youtube') {
+        setImageWidth(720)
+        setImageHeight(1280) // Shorts / vertical or 16:9
+        // Fetch title automatically if empty
+        fetch(`https://noembed.com/embed?url=${encodeURIComponent(trimmed)}`)
+          .then((r) => r.json())
+          .then((data) => {
+            if (data?.title && !title) setTitle(data.title)
+            if (data?.author_name && !description) setDescription(`Video by ${data.author_name}`)
+          })
+          .catch(() => {})
+      } else if (parsedVideo.provider === 'direct') {
+        extractAndStoreVideoPoster(trimmed)
       }
+      return
+    }
+
+    // Standard Image URL
+    setVideoUrl('')
+    setImageUrl(trimmed)
+    setMediaUrls([trimmed])
+
+    const img = new Image()
+    img.src = trimmed
+    img.onload = () => {
+      setImageWidth(img.naturalWidth || 800)
+      setImageHeight(img.naturalHeight || 1000)
     }
   }
 
@@ -499,14 +545,26 @@ export default function CreatePinModal({
                     </div>
                   ) : videoUrl ? (
                     <div className="relative group/preview w-full h-full flex flex-col items-center justify-center">
-                      <video
-                        src={videoUrl}
-                        controls
-                        autoPlay
-                        loop
-                        muted
-                        className="max-h-[340px] w-auto rounded-xl shadow-sm"
-                      />
+                      {parseVideoUrl(videoUrl)?.provider === 'youtube' ? (
+                        <div className="relative w-full h-[320px] rounded-xl overflow-hidden bg-black shadow-sm">
+                          <iframe
+                            src={parseVideoUrl(videoUrl)!.embedUrl}
+                            title="YouTube Preview"
+                            className="w-full h-full border-0 rounded-xl"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        </div>
+                      ) : (
+                        <video
+                          src={videoUrl}
+                          controls
+                          autoPlay
+                          loop
+                          muted
+                          className="max-h-[340px] w-auto rounded-xl shadow-sm"
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -516,12 +574,12 @@ export default function CreatePinModal({
                           setMediaUrls([])
                           setMediaUrlInput('')
                         }}
-                        className="absolute top-2 right-2 p-2 bg-white/90 hover:bg-white text-[#111111] hover:text-[#e60023] rounded-full shadow-md transition-colors"
+                        className="absolute top-2 right-2 p-2 bg-white/90 hover:bg-white text-[#111111] hover:text-[#e60023] rounded-full shadow-md transition-colors z-20"
                         title="Remove video"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                      <span className="absolute bottom-3 left-3 bg-black/70 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <span className="absolute bottom-3 left-3 bg-black/70 text-white text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 z-20 pointer-events-none">
                         <Video className="w-3 h-3" /> Video Pin
                       </span>
                     </div>
