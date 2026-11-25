@@ -35,6 +35,7 @@ export default function PinCard({
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
+  const [isPickerOpen, setIsPickerOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const mediaList = pin.mediaUrls && pin.mediaUrls.length > 0 ? pin.mediaUrls : [pin.imageUrl]
@@ -110,9 +111,14 @@ export default function PinCard({
     }
   }
 
-  // Pinterest clamps vertical pins to maximum 1:2.1 ratio (210%)
+  // Pinterest clamps vertical pins to maximum 1:2.1 ratio (210%) and minimum 75% for aesthetic balance
   const rawRatio = (pin.imageHeight / (pin.imageWidth || 800)) * 100
-  const aspectRatio = Math.min(Math.max(rawRatio, 60), 210)
+  const aspectRatio = Math.min(Math.max(rawRatio, 75), 210)
+
+  // Extract clean domain for Pinterest-style source pill
+  const cleanDomain = pin.sourceLink
+    ? pin.sourceLink.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]
+    : null
 
   if (isHidden) {
     return (
@@ -131,7 +137,9 @@ export default function PinCard({
 
   return (
     <div
-      className="masonry-item group relative cursor-pointer hover:z-10 focus-within:z-20"
+      className={`masonry-item group relative cursor-pointer ${
+        isPickerOpen ? 'z-50' : 'hover:z-10 focus-within:z-20'
+      }`}
       onMouseEnter={handleMouseEnter}
     >
       <div className="relative rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">
@@ -156,8 +164,8 @@ export default function PinCard({
                   className="w-full h-full object-cover"
                 />
                 {/* Video Play Indicator Badge */}
-                <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white font-bold text-[11px] rounded-full flex items-center gap-1 z-10">
-                  <Play className="w-3 h-3 fill-white" />
+                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-black/60 backdrop-blur-sm text-white font-bold text-[10px] rounded-full flex items-center gap-1 z-10 pointer-events-none">
+                  <Play className="w-2.5 h-2.5 fill-white" />
                   <span>Video</span>
                 </div>
 
@@ -165,10 +173,10 @@ export default function PinCard({
                 <button
                   type="button"
                   onClick={toggleMute}
-                  className="absolute bottom-3 left-3 p-2 rounded-full bg-black/70 hover:bg-black/90 text-white shadow-md z-20 transition-transform hover:scale-105"
+                  className="absolute bottom-2.5 left-2.5 p-1.5 rounded-full bg-black/70 hover:bg-black/90 text-white shadow-md z-20 transition-transform hover:scale-105"
                   title={isMuted ? 'Unmute' : 'Mute'}
                 >
-                  {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                  {isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
                 </button>
               </div>
             ) : (
@@ -180,24 +188,24 @@ export default function PinCard({
               />
             )}
 
-            {/* Carousel Left/Right Controls on Hover */}
+            {/* Carousel Left/Right Controls on Hover (Sleek & discreet) */}
             {isCarousel && (
-              <div className="absolute inset-y-0 inset-x-2 flex items-center justify-between pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              <div className="absolute inset-y-0 inset-x-1.5 flex items-center justify-between pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-10">
                 <button
                   type="button"
                   onClick={handlePrevSlide}
-                  className="pointer-events-auto p-1.5 rounded-full bg-white/90 hover:bg-white text-zinc-800 shadow-md transition-transform hover:scale-105"
+                  className="pointer-events-auto p-1 rounded-full bg-white/80 hover:bg-white text-zinc-800 shadow transition-transform hover:scale-110"
                   title="Previous image"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <ChevronLeft className="w-3 h-3" />
                 </button>
                 <button
                   type="button"
                   onClick={handleNextSlide}
-                  className="pointer-events-auto p-1.5 rounded-full bg-white/90 hover:bg-white text-zinc-800 shadow-md transition-transform hover:scale-105"
+                  className="pointer-events-auto p-1 rounded-full bg-white/80 hover:bg-white text-zinc-800 shadow transition-transform hover:scale-110"
                   title="Next image"
                 >
-                  <ChevronRight className="w-3.5 h-3.5" />
+                  <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
             )}
@@ -208,8 +216,8 @@ export default function PinCard({
                 {mediaList.map((_, idx) => (
                   <div
                     key={idx}
-                    className={`h-1.5 rounded-full transition-all ${
-                      idx === currentSlide ? 'w-3.5 bg-white shadow-sm' : 'w-1.5 bg-white/60'
+                    className={`h-1 rounded-full transition-all ${
+                      idx === currentSlide ? 'w-3 bg-white shadow-sm' : 'w-1 bg-white/60'
                     }`}
                   />
                 ))}
@@ -218,11 +226,15 @@ export default function PinCard({
           </div>
 
           {/* Hover Dark Scrim Overlay */}
-          <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
         </div>
 
-        {/* Floating Top Right: Save Button (Outside overflow-hidden so popover is never clipped) */}
-        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-auto z-20">
+        {/* Floating Top Right: Save Button (Always visible on hover, or when picker open) */}
+        <div
+          className={`absolute top-2.5 right-2.5 transition-opacity duration-200 pointer-events-auto z-30 ${
+            isPickerOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
           <SaveButton
             pinId={pin.id}
             isSaved={pin.isSaved}
@@ -231,52 +243,54 @@ export default function PinCard({
               onSaveToSpecificBoard(pin.id, boardId, boardTitle, sectionId, sectionTitle)
             }
             onCreateBoardClick={() => onCreateBoardClick(pin.id)}
+            onOpenChange={setIsPickerOpen}
           />
         </div>
 
-        {/* Floating Bottom Action Icons */}
-        <div className="absolute bottom-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-auto z-20">
-          {onVisualSearchClick && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onVisualSearchClick(pin)
-              }}
-              className="p-2 bg-white/90 hover:bg-white text-zinc-900 rounded-full shadow-md transition-colors"
-              title="Visual search"
-            >
-              <Scan className="w-4 h-4 text-zinc-800" />
-            </button>
-          )}
-          {pin.sourceLink && (
+        {/* Floating Bottom Action Area (Hides when picker open to eliminate clutter) */}
+        <div
+          className={`absolute bottom-2.5 inset-x-2.5 flex items-center justify-between transition-opacity duration-200 pointer-events-auto z-20 ${
+            isPickerOpen ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          {/* Left: Source Link Pill (like Pinterest desktop) */}
+          {cleanDomain ? (
             <a
-              href={pin.sourceLink}
+              href={pin.sourceLink!}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="p-2 bg-white/90 hover:bg-white text-zinc-900 rounded-full shadow-md transition-colors"
-              title="Visit source"
+              className="px-2.5 py-1 bg-white/90 hover:bg-white text-zinc-900 text-[11px] font-medium rounded-full shadow-sm flex items-center gap-1 max-w-[120px] truncate transition-colors"
+              title={pin.sourceLink || undefined}
             >
-              <ArrowUpRight className="w-4 h-4" />
+              <span className="truncate">{cleanDomain}</span>
+              <ArrowUpRight className="w-3 h-3 shrink-0 text-zinc-500" />
             </a>
+          ) : (
+            <div />
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              navigator.clipboard?.writeText(window.location.origin + `/pin/${pin.id}`)
-            }}
-            className="p-2 bg-white/90 hover:bg-white text-zinc-900 rounded-full shadow-md transition-colors"
-            title="Copy link"
-          >
-            <Share2 className="w-4 h-4" />
-          </button>
-          <div onClick={(e) => e.stopPropagation()}>
-            <PinActionsMenu
-              imageUrl={pin.imageUrl}
-              pinTitle={pin.title}
-              onHidePin={() => setIsHidden(true)}
-              onReportPin={() => setIsReportOpen(true)}
-            />
+
+          {/* Right: Quick Action Buttons (Share & More) */}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigator.clipboard?.writeText(window.location.origin + `/pin/${pin.id}`)
+              }}
+              className="p-1.5 bg-white/90 hover:bg-white text-zinc-900 rounded-full shadow-sm transition-transform hover:scale-105"
+              title="Copy link"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+            <div onClick={(e) => e.stopPropagation()}>
+              <PinActionsMenu
+                imageUrl={pin.imageUrl}
+                pinTitle={pin.title}
+                onHidePin={() => setIsHidden(true)}
+                onReportPin={() => setIsReportOpen(true)}
+              />
+            </div>
           </div>
         </div>
       </div>

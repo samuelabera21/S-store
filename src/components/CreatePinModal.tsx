@@ -179,16 +179,72 @@ export default function CreatePinModal({
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
         canvas.toBlob(async (blob) => {
           if (!blob) return
-          const formData = new FormData()
-          formData.append('file', new File([blob], 'poster.jpg', { type: 'image/jpeg' }))
-          const res = await fetch('/api/v1/upload', { method: 'POST', body: formData })
-          const data = await res.json()
-          if (data?.url) {
-            setImageUrl(data.url)
-          }
+          try {
+            const posterFile = new File([blob], 'poster.jpg', { type: 'image/jpeg' })
+            const url = await uploadFileSafely(posterFile)
+            if (url) setImageUrl(url)
+          } catch {}
         }, 'image/jpeg', 0.85)
       }
     } catch {}
+  }
+
+  // Safe Universal Upload Handler (bypasses Vercel 4.5MB limit via direct Cloudinary streaming for videos & large files)
+  const uploadFileSafely = async (file: File): Promise<string> => {
+    try {
+      // 1. Try direct upload to Cloudinary if signed upload is supported
+      const sigRes = await fetch('/api/v1/upload/signature', { method: 'POST' })
+      if (sigRes.ok) {
+        const sig = await sigRes.json().catch(() => null)
+        if (sig?.directUploadAvailable) {
+          const cloudFormData = new FormData()
+          cloudFormData.append('file', file)
+          cloudFormData.append('api_key', sig.apiKey)
+          cloudFormData.append('timestamp', String(sig.timestamp))
+          cloudFormData.append('signature', sig.signature)
+          cloudFormData.append('folder', sig.folder)
+
+          const cloudRes = await fetch(
+            `https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`,
+            {
+              method: 'POST',
+              body: cloudFormData,
+            }
+          )
+
+          if (cloudRes.ok) {
+            const cloudData = await cloudRes.json()
+            if (cloudData.secure_url) {
+              return cloudData.secure_url
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Direct upload attempt fallback:', e)
+    }
+
+    // 2. Fallback to server route /api/v1/upload
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/v1/upload', { method: 'POST', body: formData })
+
+    if (!res.ok) {
+      if (res.status === 413) {
+        throw new Error('File size exceeds server upload limit. Please choose a smaller file under 25MB.')
+      }
+      const errText = await res.text().catch(() => '')
+      try {
+        const errJson = JSON.parse(errText)
+        throw new Error(errJson.error || `Upload failed with status ${res.status}`)
+      } catch {
+        throw new Error(errText || `Upload failed with status ${res.status}`)
+      }
+    }
+
+    const data = await res.json()
+    if (!data.url) throw new Error('No URL returned from upload')
+    return data.url
   }
 
   // Handle direct URL paste for image or video
@@ -236,17 +292,12 @@ export default function CreatePinModal({
       setUploading(true)
       setError(null)
       try {
-        const formData = new FormData()
-        formData.append('file', fileList[0])
-        const res = await fetch('/api/v1/upload', { method: 'POST', body: formData })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to upload video')
-
-        setVideoUrl(data.url)
-        setImageUrl(data.url)
-        setMediaUrls([data.url])
+        const uploadedUrl = await uploadFileSafely(fileList[0])
+        setVideoUrl(uploadedUrl)
+        setImageUrl(uploadedUrl)
+        setMediaUrls([uploadedUrl])
         setMediaUrlInput('')
-        extractAndStoreVideoPoster(data.url)
+        extractAndStoreVideoPoster(uploadedUrl)
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Upload failed')
       } finally {
@@ -261,12 +312,7 @@ export default function CreatePinModal({
 
     try {
       const uploadPromises = fileList.slice(0, 5).map(async (file) => {
-        const formData = new FormData()
-        formData.append('file', file)
-        const res = await fetch('/api/v1/upload', { method: 'POST', body: formData })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to upload image')
-        return data.url as string
+        return await uploadFileSafely(file)
       })
 
       const uploadedUrls = await Promise.all(uploadPromises)
